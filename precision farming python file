@@ -1,0 +1,272 @@
+import json
+import numpy as np
+import tensorflow as tf
+from flask import Flask, request, jsonify
+from PIL import Image
+
+#congfigure
+IMG_SIZE = 128
+MODEL_PATH = "plant_disease_model.h5"
+CLASS_FILE = "class_names.json"
+
+# load model
+model = tf.keras.models.load_model(MODEL_PATH)
+
+with open(CLASS_FILE, "r") as f:
+    class_names = json.load(f)
+
+# disease info
+disease_info = {}
+
+for name in class_names:
+    disease_info[name] = {
+        "cure": "Apply recommended fungicide or bactericide based on disease type.",
+        "prevention": "Ensure proper irrigation, remove infected leaves, and maintain crop hygiene."
+    }
+
+# flask app
+app = Flask(__name__)
+
+def preprocess_image(image):
+    image = image.resize((IMG_SIZE, IMG_SIZE))
+    image = np.array(image) / 255.0
+    image = np.expand_dims(image, axis=0)
+    return image
+
+# frontend look
+@app.route("/")
+def home():
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Precision Farming Dashboard</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+
+body{
+    font-family:'Segoe UI',sans-serif;
+    color:white;
+    background:
+        linear-gradient(rgba(0,120,40,0.65), rgba(0,90,30,0.75)),
+        url("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1920&q=80");
+    background-size:cover;
+    background-position:center;
+    background-attachment:fixed;
+}
+
+.header{
+    text-align:center;
+    padding:25px;
+    font-size:32px;
+    font-weight:bold;
+    background:rgba(0,0,0,0.2);
+    backdrop-filter:blur(6px);
+}
+
+.top-bar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:20px;
+    padding:30px 50px;
+    justify-content:space-between;
+}
+
+.card, .upload-box, .section{
+    background:rgba(255,255,255,0.22);
+    backdrop-filter:blur(12px);
+    border-radius:20px;
+    padding:20px;
+    box-shadow:0 10px 25px rgba(0,0,0,0.25);
+}
+
+.card{
+    flex:1;
+    min-width:220px;
+    transition:0.3s;
+}
+
+.card:hover{transform:translateY(-6px);}
+
+.card-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.card i{font-size:22px;color:white;}
+.card h2{margin-top:10px;font-size:28px;}
+
+.upload-box{
+    min-width:300px;
+    text-align:center;
+}
+
+.upload-box input{
+    margin-top:12px;
+    padding:6px;
+    border-radius:6px;
+    border:none;
+}
+
+.dashboard{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(350px,1fr));
+    gap:25px;
+    padding:20px 50px 60px 50px;
+}
+
+.section h3{margin-bottom:15px;}
+
+.gauge{
+    background:rgba(255,255,255,0.35);
+    height:12px;
+    border-radius:10px;
+    overflow:hidden;
+    margin-top:8px;
+}
+
+.gauge-fill{
+    height:100%;
+    background:linear-gradient(90deg,#00ff88,#00cc66);
+}
+
+.footer{
+    text-align:center;
+    padding:15px;
+    background:rgba(0,0,0,0.2);
+    font-size:14px;
+}
+
+#result{
+    margin-top:15px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+🌾 Precision Farming Dashboard
+</div>
+
+<div class="top-bar">
+
+<div class="card">
+<div class="card-header">
+<span>Total Fields</span>
+<i class="fa-solid fa-layer-group"></i>
+</div>
+<h2>15</h2>
+</div>
+
+<div class="card">
+<div class="card-header">
+<span>Sensor Alerts</span>
+<i class="fa-solid fa-bell"></i>
+</div>
+<h2>3</h2>
+</div>
+
+<div class="card">
+<div class="card-header">
+<span>Weather</span>
+<i class="fa-solid fa-sun"></i>
+</div>
+<h2>26°C</h2>
+<small>Sunny</small>
+</div>
+
+<div class="upload-box">
+<i class="fa-solid fa-leaf"></i>
+<h3>Crop Disease Detection</h3>
+
+<form id="upload-form" enctype="multipart/form-data">
+<input type="file" name="image" required>
+<button style="margin-top:10px;padding:8px 15px;border:none;border-radius:6px;background:#00cc66;color:white;">Analyze</button>
+</form>
+
+<div id="result"></div>
+
+</div>
+
+</div>
+
+<div class="dashboard">
+
+<div class="section">
+<h3>Soil Conditions</h3>
+Moisture: 68%
+<div class="gauge"><div class="gauge-fill" style="width:68%"></div></div>
+<br>
+pH Level: 6.5
+<div class="gauge"><div class="gauge-fill" style="width:65%"></div></div>
+</div>
+
+<div class="section">
+<h3>Crop Health</h3>
+Healthy Crops: 78%
+<div class="gauge"><div class="gauge-fill" style="width:78%"></div></div>
+</div>
+
+</div>
+
+<div class="footer">
+AI Powered Smart Agriculture Monitoring System
+</div>
+
+<script>
+document.getElementById("upload-form").onsubmit = async function(e){
+    e.preventDefault();
+    let formData = new FormData(this);
+
+    let response = await fetch("/predict", {
+        method: "POST",
+        body: formData
+    });
+
+    let result = await response.json();
+
+    document.getElementById("result").innerHTML =
+        `<div style="background:white;color:black;padding:15px;border-radius:10px;">
+            <h4>Disease: ${result.disease}</h4>
+            <p>Confidence: ${result.confidence}%</p>
+            <p><strong>Cure:</strong> ${result.cure}</p>
+            <p><strong>Prevention:</strong> ${result.prevention}</p>
+        </div>`;
+}
+</script>
+
+</body>
+</html>
+"""
+
+# prediction
+@app.route("/predict", methods=["POST"])
+def predict():
+    file = request.files["image"]
+    image = Image.open(file).convert("RGB")
+    processed = preprocess_image(image)
+
+    prediction = model.predict(processed)
+    class_index = np.argmax(prediction)
+    confidence = float(np.max(prediction)) * 100
+
+    disease_name = class_names[class_index]
+    cure = disease_info[disease_name]["cure"]
+    prevention = disease_info[disease_name]["prevention"]
+
+    return jsonify({
+        "disease": disease_name,
+        "confidence": round(confidence, 2),
+        "cure": cure,
+        "prevention": prevention
+    })
+
+if __name__ == "__main__":
+    app.run(debug=True)
