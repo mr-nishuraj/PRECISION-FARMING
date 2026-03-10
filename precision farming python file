@@ -33,7 +33,7 @@ def preprocess_image(image):
     image = np.expand_dims(image, axis=0)
     return image
 
-# frontend look
+# frontend Design
 @app.route("/")
 def home():
     return """
