@@ -9,7 +9,7 @@ IMG_SIZE = 128
 MODEL_PATH = "plant_disease_model.h5"  
 CLASS_FILE = "class_names.json"
   
-# model loading   
+# model loading in project
 model = tf.keras.models.load_model(MODEL_PATH)
 
 with open(CLASS_FILE, "r") as f:
