@@ -1,9 +1,6 @@
 import json
 import numpy as np
 import tensorflow as tf
-from flask import Flask, request, jsonify
-from PIL import Image
-
 #congfigure the image   
 IMG_SIZE = 128
 MODEL_PATH = "plant_disease_model.h5"  
